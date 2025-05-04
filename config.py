@@ -1,0 +1,1 @@
+local_dir = "edu_fineweb10B"
