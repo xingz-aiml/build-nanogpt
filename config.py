@@ -1,1 +1,1 @@
-local_dir = "edu_fineweb10B"
+local_dir = ".data/edu_fineweb10B"
