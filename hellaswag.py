@@ -26,8 +26,8 @@ The validation set of HellaSwag has a total of 10,042 examples.
 """
 
 import os
-import json
 import requests
+import pandas as pd
 import tiktoken
 from tqdm import tqdm
 import torch
@@ -53,10 +53,13 @@ def download_file(url: str, fname: str, chunk_size=1024):
             size = file.write(data)
             bar.update(size)
 
+# NOTE: the original github repo (rowanz/hellaswag, .jsonl files) was taken down by DMCA in 2026-09.
+# The dataset is still hosted on Hugging Face as parquet.
+HF_BASE = "https://huggingface.co/datasets/Rowan/hellaswag/resolve/main/data"
 hellaswags = {
-    "train": "https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_train.jsonl",
-    "val": "https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_val.jsonl",
-    "test": "https://raw.githubusercontent.com/rowanz/hellaswag/master/data/hellaswag_test.jsonl",
+    "train": f"{HF_BASE}/train-00000-of-00001.parquet",
+    "val": f"{HF_BASE}/validation-00000-of-00001.parquet",
+    "test": f"{HF_BASE}/test-00000-of-00001.parquet",
 }
 
 enc = tiktoken.get_encoding("gpt2")
@@ -65,7 +68,7 @@ def download(split):
     """Downloads HellaSwag DATA_CACHE_DIR"""
     os.makedirs(DATA_CACHE_DIR, exist_ok=True)
     data_url = hellaswags[split]
-    data_filename = os.path.join(DATA_CACHE_DIR, f"hellaswag_{split}.jsonl")
+    data_filename = os.path.join(DATA_CACHE_DIR, f"hellaswag_{split}.parquet")
     if not os.path.exists(data_filename):
         print(f"Downloading {data_url} to {data_filename}...")
         download_file(data_url, data_filename)
@@ -112,10 +115,12 @@ def render_example(example):
 def iterate_examples(split):
     # there are 10,042 examples in total in val
     download(split)
-    with open(os.path.join(DATA_CACHE_DIR, f"hellaswag_{split}.jsonl"), "r") as f:
-        for line in f:
-            example = json.loads(line)
-            yield example
+    df = pd.read_parquet(os.path.join(DATA_CACHE_DIR, f"hellaswag_{split}.parquet"))
+    for example in df.to_dict(orient="records"):
+        # parquet stores endings as a numpy array and label as a string
+        example["endings"] = list(example["endings"])
+        example["label"] = int(example["label"])
+        yield example
 
 @torch.no_grad()
 def evaluate(model_type, device):
